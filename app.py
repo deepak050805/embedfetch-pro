@@ -10,7 +10,7 @@ from typing import Dict, Any
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 from downloader.ytdlp_handler import extract_video_info, download_video
@@ -119,63 +119,27 @@ async def extract_embed(data: DownloadRequest):
         }
 
 
+# =========================
+# FIXED DOWNLOAD ROUTE
+# Browser downloads directly to user PC
+# =========================
 @app.post("/api/download/single")
-async def start_single_download(
-    data: DownloadRequest,
-    background_tasks: BackgroundTasks
-):
+async def start_single_download(data: DownloadRequest):
     """
-    Start single video download.
+    Download single video directly to browser.
     """
     try:
-        task_id = str(uuid.uuid4())
+        file_path = download_video(
+            url=data.url,
+            output_dir="downloads",
+            format_id=data.format_id
+        )
 
-        download_tasks[task_id] = {
-            "status": "downloading",
-            "progress": "0%",
-            "speed": "0 MB/s",
-            "eta": "--",
-            "file": None
-        }
-
-        def progress_hook(d):
-            if d["status"] == "downloading":
-                percent = d.get("_percent_str", "0%").strip()
-                speed = d.get("_speed_str", "0 MB/s")
-                eta = d.get("_eta_str", "--")
-
-                ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
-                percent = ansi_escape.sub('', percent)
-                speed = ansi_escape.sub('', str(speed))
-                eta = ansi_escape.sub('', str(eta))
-
-                download_tasks[task_id]["progress"] = percent
-                download_tasks[task_id]["speed"] = speed
-                download_tasks[task_id]["eta"] = eta
-
-            elif d["status"] == "finished":
-                download_tasks[task_id]["status"] = "completed"
-
-        def run_download():
-            try:
-                download_video(
-                    url=data.url,
-                    output_dir="downloads",
-                    format_id=data.format_id,
-                    progress_hook=progress_hook
-                )
-                download_tasks[task_id]["status"] = "completed"
-
-            except Exception as e:
-                download_tasks[task_id]["status"] = "error"
-                download_tasks[task_id]["error"] = str(e)
-
-        background_tasks.add_task(run_download)
-
-        return {
-            "status": "success",
-            "task_id": task_id
-        }
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/octet-stream"
+        )
 
     except Exception as e:
         return JSONResponse(
