@@ -147,7 +147,8 @@ if (singleForm) {
             dlStatus.classList.replace('text-purple-400', 'text-red-400');
             dlStats.textContent = '';
             bar.style.width = '0%';
-        } finally {
+            
+            // Revert button ONLY if an error actually occurred stopping the redirect
             btnText.textContent = 'Start New Download';
             spinner.classList.add('hidden');
         }
