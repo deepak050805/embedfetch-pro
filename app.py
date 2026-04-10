@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
-from downloader.ytdlp_handler import extract_video_info, download_video
+from downloader.ytdlp_handler import extract_video_info, download_video, get_direct_url
 from downloader.playlist_manager import fetch_playlist
 from downloader.selenium_extractor import extract_embedded_urls
 from utils import check_ffmpeg_installed
@@ -129,17 +129,16 @@ async def start_single_download(data: DownloadRequest):
     Download single video directly to browser.
     """
     try:
-        file_path = download_video(
+        # Instead of downloading proxy-style, instantly fetch the direct CDN URL
+        direct_url = get_direct_url(
             url=data.url,
-            output_dir="downloads",
             format_id=data.format_id
         )
 
-        return FileResponse(
-            path=file_path,
-            filename=os.path.basename(file_path),
-            media_type="application/octet-stream"
-        )
+        return {
+            "status": "success",
+            "direct_url": direct_url
+        }
 
     except Exception as e:
         import traceback

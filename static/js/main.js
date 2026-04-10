@@ -125,30 +125,18 @@ if (singleForm) {
                 throw new Error(errData && errData.detail ? errData.detail : "Download failed.");
             }
 
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-
-            // Extract filename from header if available
-            let filename = "video.mp4";
-            const disposition = response.headers.get("content-disposition");
-            if (disposition && disposition.includes("filename=")) {
-                filename = disposition
-                    .split("filename=")[1]
-                    .replace(/"/g, '');
+            const resultData = await response.json();
+            
+            if (resultData.status !== 'success' || !resultData.direct_url) {
+                throw new Error("Failed to resolve direct CDN media URL.");
             }
 
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            // Instantly redirect the browser proxy-free!
+            window.location.href = resultData.direct_url;
 
-            window.URL.revokeObjectURL(blobUrl);
-
-            dlStatus.textContent = 'Download Completed Successfully!';
+            dlStatus.textContent = 'Redirecting to direct media URL...';
             dlStatus.classList.replace('text-purple-400', 'text-green-400');
-            dlStats.textContent = 'Saved to browser downloads folder';
+            dlStats.textContent = 'Loading stream from source CDN';
             bar.style.width = '100%';
 
         } catch (err) {
