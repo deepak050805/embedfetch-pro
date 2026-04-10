@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+jinja2
+yt-dlp
+selenium
+webdriver-manager
+beautifulsoup4

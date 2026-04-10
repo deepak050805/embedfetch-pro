@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Video - EmbedFetch Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: { colors: { dark: { 800: '#1e1e2d', 900: '#151521' } } } } }
+    </script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-dark-900 text-white min-h-screen relative font-sans">
+    <div class="fixed inset-0 z-[-1] bg-gradient-to-br from-dark-900 via-dark-800 to-indigo-900/20 opacity-80"></div>
+    <nav class="p-6 flex justify-between items-center max-w-6xl mx-auto border-b border-white/10">
+        <a href="/" class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">EmbedFetch Pro</a>
+        <div class="space-x-4"><a href="/playlist" class="text-gray-400 hover:text-white transition-colors">Switch to Playlist</a></div>
+    </nav>
+    <main class="max-w-3xl mx-auto px-6 py-12">
+        <div class="glass-card p-8 rounded-2xl border border-white/10 relative">
+            <h2 class="text-3xl font-bold mb-6">Analyze & Download</h2>
+            
+            <div id="ffmpegWarning" class="hidden mb-6 p-4 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-200 text-sm flex items-start gap-3">
+                <svg class="w-6 h-6 text-orange-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <p><strong>FFmpeg is missing:</strong> High resolution (1080p+) videos usually have separate audio and video streams. Without FFmpeg installed on your machine, high-res selections might download without sound. To ensure perfect quality merging, please install FFmpeg and add it to your PATH.</p>
+            </div>
+
+            <!-- STEP 1: Analyze Formats -->
+            <form id="singleAnalyzeForm" class="flex flex-col gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Video or Embed URL</label>
+                    <input type="url" id="videoUrl" required placeholder="https://example.com/embed/..." class="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors">
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 py-3 rounded-xl font-semibold text-white transition-all shadow-lg shadow-purple-500/25 mt-2 flex justify-center items-center">
+                    <span id="analyzeBtnText">Analyze Quality Formats</span>
+                    <svg id="analyzeLoadingSpinner" class="animate-spin ml-2 h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </button>
+            </form>
+            
+            <p id="analyzeError" class="text-red-400 mt-3 text-sm hidden"></p>
+
+            <!-- STEP 2: Choose Quality & Download -->
+            <div id="qualitySelectorBlock" class="mt-8 hidden border-t border-white/10 pt-6">
+                <h3 class="text-lg font-semibold mb-4 text-gray-200">Select Output Quality</h3>
+                
+                <form id="singleDownloadForm" class="flex flex-col gap-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="formatsGrid">
+                        <!-- Best auto select -->
+                        <label class="cursor-pointer">
+                            <input type="radio" name="formatSelector" value="best" checked class="peer sr-only">
+                            <div class="rounded-xl p-4 bg-dark-800 border border-white/10 peer-checked:border-purple-500 peer-checked:bg-purple-900/20 hover:border-white/30 transition-all text-left">
+                                <div class="font-semibold text-purple-400 text-lg mb-1">Best Quality (Auto)</div>
+                                <div class="text-xs text-gray-400">Automatically downloads and merges the highest available resolution with best audio.</div>
+                            </div>
+                        </label>
+                        <!-- Dynamic formats go here -->
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-semibold text-white transition-all shadow-lg shadow-indigo-500/25 mt-2 flex justify-center items-center">
+                        <span id="btnText">Download Selected Format</span>
+                        <svg id="loadingSpinner" class="animate-spin ml-2 h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </button>
+                </form>
+            </div>
+            
+            <div id="progressContainer" class="mt-8 hidden">
+                <div class="mb-2 flex justify-between text-sm">
+                    <span class="text-gray-300">Status: <span id="dlStatus" class="font-semibold text-purple-400">Starting...</span></span>
+                    <span id="dlStats" class="text-gray-400">0%</span>
+                </div>
+                <div class="w-full bg-dark-800 rounded-full h-3 mb-4 overflow-hidden border border-white/5">
+                    <div id="dlProgressBar" class="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmbedFetch Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#8b5cf6', 600: '#7c3aed' },
+                        dark: { 800: '#1e1e2d', 900: '#151521' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-dark-900 text-white min-h-screen font-sans antialiased overflow-x-hidden relative">
+    <!-- Animated Gradient Background -->
+    <div class="fixed inset-0 z-[-1] bg-gradient-to-br from-dark-900 via-dark-800 to-indigo-900/20 opacity-80 backdrop-blur-3xl"></div>
+
+    <nav class="p-6 flex justify-between items-center max-w-6xl mx-auto border-b border-white/10 glass-nav">
+        <a href="/" class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">
+            EmbedFetch Pro
+        </a>
+        <div class="space-x-6">
+            <a href="/single" class="hover:text-purple-400 transition-colors">Single Video</a>
+            <a href="/playlist" class="hover:text-purple-400 transition-colors">Playlist</a>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-6 py-20 text-center">
+        <h1 class="text-6xl font-extrabold mb-6 tracking-tight">
+            Download Any <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">Embedded Video</span>
+        </h1>
+        <p class="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">
+            The premium solution for extracting and downloading protected video streams, iframes, and playlists in maximum quality.
+        </p>
+        
+        <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <a href="/single" class="glass-card p-8 rounded-2xl hover:scale-105 transition-transform duration-300 text-left cursor-pointer border border-white/5 group hover:border-purple-500/50">
+                <div class="bg-purple-500/20 w-16 h-16 rounded-xl flex items-center justify-center mb-6 group-hover:bg-purple-500/30">
+                    <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                </div>
+                <h3 class="text-2xl font-semibold mb-3">Single Video</h3>
+                <p class="text-gray-400">Extract embedded videos from almost any webpage or iframe instantly.</p>
+            </a>
+
+            <a href="/playlist" class="glass-card p-8 rounded-2xl hover:scale-105 transition-transform duration-300 text-left cursor-pointer border border-white/5 group hover:border-pink-500/50">
+                <div class="bg-pink-500/20 w-16 h-16 rounded-xl flex items-center justify-center mb-6 group-hover:bg-pink-500/30">
+                    <svg class="w-8 h-8 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                </div>
+                <h3 class="text-2xl font-semibold mb-3">Playlist Batch</h3>
+                <p class="text-gray-400">Paste a playlist URL to fetch all metadata and download entire series seamlessly.</p>
+            </a>
+        </div>
+    </main>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
