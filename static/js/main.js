@@ -121,7 +121,8 @@ if (singleForm) {
             });
 
             if (!response.ok) {
-                throw new Error("Download failed.");
+                const errData = await response.json().catch(() => null);
+                throw new Error(errData && errData.detail ? errData.detail : "Download failed.");
             }
 
             const blob = await response.blob();

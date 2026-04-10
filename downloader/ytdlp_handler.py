@@ -204,8 +204,16 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             cached = INFO_CACHE.get(url)
             if cached and time.time() < cached["expires"]:
                 print(f"[CACHE HIT] Reusing cached metadata to skip extraction delay for {url}")
-                # We deepcopy so falling back later doesn't use an already-mutated info_dict
-                info = ydl.process_ie_result(copy.deepcopy(cached["data"]), download=True)
+                info_copy = copy.deepcopy(cached["data"])
+                # Crucial Fix: Scrub the root format assignments that were implicitly set by the generic analyzer
+                # This guarantees yt-dlp's internal `process_video_result` format selector natively re-fires without crashing
+                keys_to_pop = [
+                    'format', 'format_id', 'url', 'ext', 'manifest_url', 'vcodec', 'acodec', 'resolution',
+                    'requested_downloads', 'requested_formats'
+                ]
+                for k in keys_to_pop:
+                    info_copy.pop(k, None)
+                info = ydl.process_ie_result(info_copy, download=True)
             else:
                 info = ydl.extract_info(url, download=True)
             
