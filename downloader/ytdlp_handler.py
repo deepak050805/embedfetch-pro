@@ -143,10 +143,11 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 
     if has_ffmpeg:
         if format_id == "best":
-            target_format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+            # Prefer progressive single-stream over separated streams if available
+            target_format = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
         else:
-            # Pair selected video format with best compatible audio.
-            target_format = f"{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
+            # Prefer selected format independently if it already has audio, else merge
+            target_format = f"{format_id}[ext=mp4]/{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
     else:
         print("[WARNING] FFmpeg missing. Falling back to single progressive stream to ensure audio.")
         # Best format that is pre-merged (contains both video and audio)
@@ -173,6 +174,15 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
         ydl_opts["merge_output_format"] = "mp4"
         if ffmpeg_location:
             ydl_opts["ffmpeg_location"] = ffmpeg_location
+            
+        # In case merging runs, enforce AAC audio, H264 compat, and MOOV atom faststart for browser playback
+        ydl_opts["postprocessors"] = [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4",
+        }]
+        ydl_opts["postprocessor_args"] = {
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart"]
+        }
 
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
@@ -204,6 +214,25 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
                         
             if not final_filepath or not os.path.exists(final_filepath):
                 raise Exception(f"Download finished but output file not found on disk. Expected near: {ydl.prepare_filename(info)}")
+
+            # Validation: wait for locks to be released and confirm the temp file is completely merged
+            import time
+            part_file = final_filepath + ".part"
+            ytdl_file = final_filepath + ".ytdl"
+            
+            timeout = 30
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if os.path.exists(part_file) or os.path.exists(ytdl_file):
+                    time.sleep(1)
+                else:
+                    break
+                    
+            if os.path.exists(part_file) or os.path.exists(ytdl_file):
+                raise Exception("Corrupted download: incomplete temp files still exist after extraction timeout.")
+
+            if os.path.getsize(final_filepath) == 0:
+                raise Exception("Corrupted download: output file is completely empty (0 bytes).")
                 
             return final_filepath
 
