@@ -176,10 +176,7 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             ydl_opts["ffmpeg_location"] = ffmpeg_location
             
         # In case merging runs, enforce AAC audio, H264 compat, and MOOV atom faststart for browser playback
-        ydl_opts["postprocessors"] = [{
-            "key": "FFmpegVideoConvertor",
-            "preferedformat": "mp4",
-        }]
+        # We purposely avoid the FFmpegVideoConvertor postprocessor to ensure we skip FFmpeg entirely for native progressive streams
         ydl_opts["postprocessor_args"] = {
             "ffmpeg": [
                 "-c:v", "copy",
