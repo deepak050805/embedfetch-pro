@@ -7,24 +7,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await res.json();
         if (!data.ffmpeg_installed) {
             const warnBox = document.getElementById('ffmpegWarning');
-            if(warnBox) warnBox.classList.remove('hidden');
+            if (warnBox) warnBox.classList.remove('hidden');
         }
-    } catch(e) { console.error('Could not check system status'); }
+    } catch (e) {
+        console.error('Could not check system status');
+    }
 });
 
 
+// ================================
 // Step 1: Analyze Video
+// ================================
 const analyzeForm = document.getElementById('singleAnalyzeForm');
 if (analyzeForm) {
     analyzeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
         const url = document.getElementById('videoUrl').value;
         const btnText = document.getElementById('analyzeBtnText');
         const spinner = document.getElementById('analyzeLoadingSpinner');
         const errText = document.getElementById('analyzeError');
         const qBlock = document.getElementById('qualitySelectorBlock');
         const formatsGrid = document.getElementById('formatsGrid');
-        
+
         btnText.textContent = 'Analyzing...';
         spinner.classList.remove('hidden');
         errText.classList.add('hidden');
@@ -33,18 +38,18 @@ if (analyzeForm) {
         try {
             const res = await fetch('/api/formats', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url: url})
             });
+
             const data = await res.json();
-            
+
             if (data.status === 'success') {
-                // Clear out everything except the 'best' option
                 const childrenArray = Array.from(formatsGrid.children);
-                for(let i = 1; i < childrenArray.length; i++){
+                for (let i = 1; i < childrenArray.length; i++) {
                     formatsGrid.removeChild(childrenArray[i]);
                 }
-                
+
                 if (data.formats && Array.isArray(data.formats)) {
                     data.formats.forEach(f => {
                         const lbl = document.createElement('label');
@@ -60,11 +65,12 @@ if (analyzeForm) {
                         formatsGrid.appendChild(lbl);
                     });
                 }
-                
+
                 qBlock.classList.remove('hidden');
             } else {
                 throw new Error(data.message || 'Error extracting formats');
             }
+
         } catch (err) {
             errText.textContent = 'Playback error: ' + err.message;
             errText.classList.remove('hidden');
@@ -75,15 +81,19 @@ if (analyzeForm) {
     });
 }
 
-// Step 2: Download Selected Quality
+
+// ================================
+// Step 2: FIXED DIRECT DOWNLOAD
+// ================================
 const singleForm = document.getElementById('singleDownloadForm');
 if (singleForm) {
     singleForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
         const url = document.getElementById('videoUrl').value;
         const selectorVal = document.querySelector('input[name="formatSelector"]:checked');
         const formatId = selectorVal ? selectorVal.value : 'best';
-        
+
         const btnText = document.getElementById('btnText');
         const spinner = document.getElementById('loadingSpinner');
         const progressContainer = document.getElementById('progressContainer');
@@ -91,38 +101,76 @@ if (singleForm) {
         const dlStats = document.getElementById('dlStats');
         const bar = document.getElementById('dlProgressBar');
 
-        btnText.textContent = 'Requesting...';
+        btnText.textContent = 'Downloading...';
         spinner.classList.remove('hidden');
         progressContainer.classList.remove('hidden');
         dlStatus.classList.remove('text-red-400', 'text-green-400');
         dlStatus.classList.add('text-purple-400');
-        dlStatus.textContent = 'Starting...';
+        dlStatus.textContent = 'Preparing download...';
+        dlStats.textContent = 'Please wait while file is generated...';
+        bar.style.width = '50%';
 
         try {
-            const res = await fetch('/api/download/single', {
+            const response = await fetch('/api/download/single', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url, format_id: formatId })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    url: url,
+                    format_id: formatId
+                })
             });
-            const data = await res.json();
-            
-            if (data.task_id) {
-                pollProgress(data.task_id, dlStatus, dlStats, bar, btnText, spinner);
+
+            if (!response.ok) {
+                throw new Error("Download failed.");
             }
+
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+
+            // Extract filename from header if available
+            let filename = "video.mp4";
+            const disposition = response.headers.get("content-disposition");
+            if (disposition && disposition.includes("filename=")) {
+                filename = disposition
+                    .split("filename=")[1]
+                    .replace(/"/g, '');
+            }
+
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(blobUrl);
+
+            dlStatus.textContent = 'Download Completed Successfully!';
+            dlStatus.classList.replace('text-purple-400', 'text-green-400');
+            dlStats.textContent = 'Saved to browser downloads folder';
+            bar.style.width = '100%';
+
         } catch (err) {
-            dlStatus.textContent = 'Error initiating download';
+            dlStatus.textContent = 'Error: ' + err.message;
             dlStatus.classList.replace('text-purple-400', 'text-red-400');
-            btnText.textContent = 'Download Selected Format';
+            dlStats.textContent = '';
+            bar.style.width = '0%';
+        } finally {
+            btnText.textContent = 'Start New Download';
             spinner.classList.add('hidden');
         }
     });
 }
 
-// Playlist UI
+
+// ================================
+// Playlist UI (unchanged)
+// ================================
 const playlistForm = document.getElementById('playlistForm');
 if (playlistForm) {
     playlistForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
         const url = document.getElementById('playlistUrl').value;
         const btnText = document.getElementById('pBtnText');
         const spinner = document.getElementById('pLoadingSpinner');
@@ -140,79 +188,27 @@ if (playlistForm) {
         try {
             const resExt = await fetch('/api/playlist/extract', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({url: url})
             });
+
             const dataExt = await resExt.json();
-            
+
             if (dataExt.status === 'success') {
                 listContainer.classList.remove('hidden');
-                listUl.innerHTML = dataExt.videos.map(v => 
+                listUl.innerHTML = dataExt.videos.map(v =>
                     `<li class="bg-dark-900/80 p-3 rounded-lg flex justify-between border border-white/5">
                         <span class="truncate font-medium text-gray-200">${v.title}</span>
                     </li>`
                 ).join('');
-
-                btnText.textContent = 'Starting Download...';
-                
-                const resDl = await fetch('/api/download/playlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url, format_id: "best" })
-                });
-                const dataDl = await resDl.json();
-                
-                if (dataDl.task_id) {
-                    progressContainer.classList.remove('hidden');
-                    dlStatus.classList.remove('text-red-400', 'text-green-400');
-                    dlStatus.classList.add('text-pink-400');
-                    pollProgress(dataDl.task_id, dlStatus, dlStats, bar, btnText, spinner, true);
-                }
-            } else {
-                throw new Error("Failed extraction");
             }
+
         } catch (err) {
             dlStatus.innerText = 'Error initiating playlist download';
             dlStatus.classList.replace('text-pink-400', 'text-red-400');
+        } finally {
             btnText.textContent = 'Fetch & Download All';
             spinner.classList.add('hidden');
         }
     });
-}
-
-function pollProgress(taskId, statusEl, statsEl, barEl, btnText, spinner, isPlaylist = false) {
-    const interval = setInterval(async () => {
-        try {
-            const res = await fetch(`/api/download_status/${taskId}`);
-            const status = await res.json();
-            
-            if (status.status === 'error') {
-                statusEl.textContent = 'Error: ' + status.error;
-                if(isPlaylist) statusEl.classList.replace('text-pink-400', 'text-red-400');
-                else statusEl.classList.replace('text-purple-400', 'text-red-400');
-                clearInterval(interval);
-                btnText.textContent = isPlaylist ? 'Fetch & Download All' : 'Start New Download';
-                spinner.classList.add('hidden');
-            } else {
-                let percVal = parseFloat(status.progress) || 0;
-                barEl.style.width = percVal + '%';
-                
-                statsEl.textContent = `${status.progress} | ${status.speed} | ETA: ${status.eta}`;
-                statusEl.textContent = status.status.charAt(0).toUpperCase() + status.status.slice(1);
-                
-                if (status.status === 'completed') {
-                    statusEl.textContent = 'Download Completed Successfully!';
-                    barEl.style.width = '100%';
-                    if(isPlaylist) statusEl.classList.replace('text-pink-400', 'text-green-400');
-                    else statusEl.classList.replace('text-purple-400', 'text-green-400');
-                    
-                    clearInterval(interval);
-                    btnText.textContent = 'Start New Download';
-                    spinner.classList.add('hidden');
-                }
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    }, 3000);
 }
