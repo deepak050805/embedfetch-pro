@@ -1,6 +1,9 @@
 import yt_dlp
 import os
+import time
+import copy
 
+INFO_CACHE = {}
 
 def extract_video_info(url: str):
     """
@@ -16,6 +19,12 @@ def extract_video_info(url: str):
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
+        
+        # Cache for 60 seconds to eliminate download startup delay
+        INFO_CACHE[url] = {
+            "expires": time.time() + 60,
+            "data": copy.deepcopy(info)
+        }
 
         unique_formats = {}
 
@@ -192,7 +201,13 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 
     def perform_download(opts):
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            cached = INFO_CACHE.get(url)
+            if cached and time.time() < cached["expires"]:
+                print(f"[CACHE HIT] Reusing cached metadata to skip extraction delay for {url}")
+                # We deepcopy so falling back later doesn't use an already-mutated info_dict
+                info = ydl.process_ie_result(copy.deepcopy(cached["data"]), download=True)
+            else:
+                info = ydl.extract_info(url, download=True)
             
             # Find the final output filepath
             final_filepath = None
