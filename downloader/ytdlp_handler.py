@@ -181,7 +181,13 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             "preferedformat": "mp4",
         }]
         ydl_opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-movflags", "+faststart"]
+            "ffmpeg": [
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-avoid_negative_ts", "make_non_negative",
+                "-max_muxing_queue_size", "1024",
+                "-movflags", "+faststart"
+            ]
         }
 
     if progress_hook:
