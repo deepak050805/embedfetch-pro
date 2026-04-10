@@ -127,12 +127,15 @@ if (singleForm) {
 
             const resultData = await response.json();
             
-            if (resultData.status !== 'success' || !resultData.direct_url) {
-                throw new Error("Failed to resolve direct CDN media URL.");
+            if (resultData.status === 'success' && resultData.direct_url) {
+                // Instantly redirect the browser proxy-free!
+                window.location.href = resultData.direct_url;
+            } else if (resultData.status === 'proxy' && resultData.proxy_url) {
+                // Instantly redirect to the backend proxy stream safe route
+                window.location.href = resultData.proxy_url;
+            } else {
+                throw new Error("Failed to resolve playable media destination.");
             }
-
-            // Instantly redirect the browser proxy-free!
-            window.location.href = resultData.direct_url;
 
             dlStatus.textContent = 'Redirecting to direct media URL...';
             dlStatus.classList.replace('text-purple-400', 'text-green-400');

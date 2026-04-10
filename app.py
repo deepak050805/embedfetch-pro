@@ -10,10 +10,10 @@ from typing import Dict, Any
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from downloader.ytdlp_handler import extract_video_info, download_video, get_direct_url
+from downloader.ytdlp_handler import extract_video_info, download_video, get_download_strategy
 from downloader.playlist_manager import fetch_playlist
 from downloader.selenium_extractor import extract_embedded_urls
 from utils import check_ffmpeg_installed
@@ -126,26 +126,59 @@ async def extract_embed(data: DownloadRequest):
 @app.post("/api/download/single")
 async def start_single_download(data: DownloadRequest):
     """
-    Download single video directly to browser.
+    Hybrid Smart Routing: Resolves if a media stream is public for direct fetching,
+    or inherently protected (requiring the proxy route).
     """
     try:
-        # Instead of downloading proxy-style, instantly fetch the direct CDN URL
-        direct_url = get_direct_url(
+        strategy = get_download_strategy(
             url=data.url,
             format_id=data.format_id
         )
 
-        return {
-            "status": "success",
-            "direct_url": direct_url
-        }
+        if strategy["type"] == "direct":
+            return {
+                "status": "success",
+                "direct_url": strategy["url"]
+            }
+        else:
+            import urllib.parse
+            encoded_url = urllib.parse.quote(data.url)
+            return {
+                "status": "proxy",
+                "proxy_url": f"/api/download/proxy?url={encoded_url}&format_id={data.format_id}"
+            }
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Download failed: {str(e)}"}
+            content={"detail": f"Smart routing failed: {str(e)}"}
+        )
+
+@app.get("/api/download/proxy")
+async def proxy_download(url: str, format_id: str = "best"):
+    """
+    Backend proxy streamer. Safely buffers protected cross-origin media files maintaining headers natively via yt-dlp.
+    """
+    try:
+        file_path = download_video(
+            url=url,
+            output_dir="downloads",
+            format_id=format_id
+        )
+
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type="application/octet-stream"
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return HTMLResponse(
+            status_code=500,
+            content=f"<h2>Proxy Download Error</h2><p>{str(e)}</p>"
         )
 
 

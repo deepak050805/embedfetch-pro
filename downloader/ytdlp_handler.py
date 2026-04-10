@@ -293,10 +293,10 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
     return final_file
 
 
-def get_direct_url(url: str, format_id="best") -> str:
+def get_download_strategy(url: str, format_id="best") -> dict:
     """
-    Resolve the direct CDN URL for a given format instantly using cache.
-    Bypasses server-side file proxying to instantly serve browser direct downloads.
+    Determine if the video is safe for direct browser CDN redirection or needs backend proxy routing.
+    Youtube is direct. Protected embedded files are proxied to preserve Referer/Cookies.
     """
     import copy
     
@@ -325,22 +325,27 @@ def get_direct_url(url: str, format_id="best") -> str:
         else:
             info = ydl.extract_info(url, download=False)
             
-        direct_url = info.get("url")
-        if not direct_url and "requested_formats" in info:
-            # For merged formats without a top-level URL, we might only have separate urls.
-            # Bypassing merge for browser direct urls requires a single progressive url.
-            # So if it attempts to merge, it might not have a single `url`. 
-            # If so, force fallback to progressive.
-            pass
+        extractor = info.get("extractor", "").lower()
+        
+        # Determine strategy
+        if "youtube" in extractor or "vimeo" in extractor:
+            # Public CDN, safe to redirect directly
+            direct_url = info.get("url")
             
-        if not direct_url:
-            print("[WARNING] format requested merge. Browsers cannot parse split streams. Resolving native progressive stream.")
-            ydl_opts["format"] = "best[ext=mp4]/best"
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
-                info2 = ydl2.extract_info(url, download=False)
-                direct_url = info2.get("url")
+            if not direct_url and "requested_formats" in info:
+                pass
                 
-        if not direct_url:
-            raise Exception("Failed to extract direct CDN URL for the requested video.")
+            if not direct_url:
+                ydl_opts["format"] = "best[ext=mp4]/best"
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                    info2 = ydl2.extract_info(url, download=False)
+                    direct_url = info2.get("url")
+                    
+            if not direct_url:
+                raise Exception("Failed to extract direct CDN URL for public video.")
+                
+            return {"type": "direct", "url": direct_url}
             
-        return direct_url
+        else:
+            # Protected embedded site requiring custom Headers / Cookies
+            return {"type": "proxy", "url": None}
