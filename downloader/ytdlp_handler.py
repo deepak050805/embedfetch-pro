@@ -242,7 +242,6 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
                 raise Exception(f"Download finished but output file not found on disk. Expected near: {ydl.prepare_filename(info)}")
 
             # Validation: wait for locks to be released and confirm the temp file is completely merged
-            import time
             part_file = final_filepath + ".part"
             ytdl_file = final_filepath + ".ytdl"
             
