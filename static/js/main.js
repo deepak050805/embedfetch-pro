@@ -201,11 +201,52 @@ if (playlistForm) {
                         <span class="truncate font-medium text-gray-200">${v.title}</span>
                     </li>`
                 ).join('');
+
+                // Proceed with full playlist ZIP download
+                progressContainer.classList.remove('hidden');
+                dlStatus.textContent = 'Downloading all videos & Compressing...';
+                dlStatus.classList.remove('text-pink-400');
+                dlStatus.classList.add('text-purple-400');
+                dlStats.textContent = 'This may take quite a while...';
+                bar.style.width = '75%';
+
+                const dlRes = await fetch('/api/download/playlist', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: url, format_id: "best"})
+                });
+
+                if (!dlRes.ok) throw new Error("Bulk ZIP download failed.");
+
+                const blob = await dlRes.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+
+                let filename = "playlist.zip";
+                const disposition = dlRes.headers.get("content-disposition");
+                if (disposition && disposition.includes("filename=")) {
+                    filename = disposition.split("filename=")[1].replace(/"/g, '');
+                }
+
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(blobUrl);
+
+                dlStatus.textContent = 'Playlist Downloaded & Zipped!';
+                dlStatus.classList.replace('text-purple-400', 'text-green-400');
+                dlStats.textContent = 'Saved to browser downloads folder';
+                bar.style.width = '100%';
             }
 
         } catch (err) {
-            dlStatus.innerText = 'Error initiating playlist download';
-            dlStatus.classList.replace('text-pink-400', 'text-red-400');
+            dlStatus.innerText = 'Error: ' + err.message;
+            dlStatus.classList.remove('text-purple-400', 'text-pink-400', 'text-green-400');
+            dlStatus.classList.add('text-red-400');
+            progressContainer.classList.remove('hidden');
+            bar.style.width = '0%';
         } finally {
             btnText.textContent = 'Fetch & Download All';
             spinner.classList.add('hidden');

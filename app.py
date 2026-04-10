@@ -186,10 +186,49 @@ async def start_playlist_download(
     data: DownloadRequest,
     background_tasks: BackgroundTasks
 ):
-    return {
-        "status": "info",
-        "message": "Playlist bulk download feature coming next."
-    }
+    import zipfile
+    import shutil
+    try:
+        videos = fetch_playlist(data.url)
+        if not videos:
+            raise Exception("No videos found in playlist configuration.")
+
+        playlist_id = str(uuid.uuid4())[:8]
+        playlist_dir = os.path.join("downloads", f"playlist_{playlist_id}")
+        os.makedirs(playlist_dir, exist_ok=True)
+
+        for video in videos:
+            try:
+                print(f"[PLAYLIST INFO] Downloading video in playlist: {video['title']}")
+                download_video(url=video['url'], output_dir=playlist_dir, format_id=data.format_id)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"[PLAYLIST ERROR] Gracefully handling failed download for {video['url']}: {e}")
+
+        zip_path = os.path.join("downloads", f"playlist_{playlist_id}.zip")
+        # Ensure we don't zip the _temp directory or anything weird inside the output. We just grab the files.
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(playlist_dir):
+                if "_temp" in root: 
+                    continue
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    zipf.write(file_path, os.path.basename(file_path))
+
+        return FileResponse(
+            path=zip_path,
+            filename=f"playlist_{playlist_id}.zip",
+            media_type="application/zip"
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Playlist download failed: {str(e)}"}
+        )
 
 
 print("[DEBUG STARTUP] app.py loading completed!")
