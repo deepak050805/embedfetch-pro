@@ -72,10 +72,15 @@ def check_has_audio(filepath: str, ffmpeg_location: str) -> bool:
         return True # Can't check, fail open
 
     try:
-        ffprobe_path = os.path.join(ffmpeg_location, "ffprobe.exe") if ffmpeg_location else "ffprobe"
-        if not os.path.exists(ffprobe_path):
-            ffprobe_path = "ffprobe" # Fallback to system PATH
-            
+        if ffmpeg_location and os.path.isdir(ffmpeg_location):
+            ffprobe_path = os.path.join(ffmpeg_location, "ffprobe.exe")
+            if not os.path.exists(ffprobe_path):
+                ffprobe_path = os.path.join(ffmpeg_location, "ffprobe")
+                if not os.path.exists(ffprobe_path):
+                    ffprobe_path = "ffprobe"
+        else:
+            ffprobe_path = "ffprobe"
+
         cmd = [
             ffprobe_path,
             "-v", "quiet",
@@ -90,6 +95,9 @@ def check_has_audio(filepath: str, ffmpeg_location: str) -> bool:
             if stream.get("codec_type") == "audio":
                 return True
         return False
+    except FileNotFoundError:
+        print("[FFPROBE WARNING] ffprobe not found, skipping audio check. (Fail open)")
+        return True
     except Exception as e:
         print(f"[FFPROBE ERROR] Validation error: {e}")
         return True # Fail open
@@ -119,19 +127,30 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
     ✔ MP4 final output
     ✔ Automatic fallback retry
     """
+    import shutil
 
     temp_dir = os.path.join(output_dir, "_temp")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(temp_dir, exist_ok=True)
 
-    if format_id == "best":
-        target_format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
-    else:
-        # Pair selected video format with best compatible audio.
-        # Force fallback to absolute best if the specified combination fails.
-        target_format = f"{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
+    # Check FFmpeg availability
+    has_ffmpeg = shutil.which("ffmpeg") is not None
+    ffmpeg_location = None
+    windows_ffmpeg = r"C:\ffmpeg\ffmpeg-8.1-essentials_build\bin"
+    if not has_ffmpeg and os.path.exists(windows_ffmpeg):
+        has_ffmpeg = True
+        ffmpeg_location = windows_ffmpeg
 
-    ffmpeg_location = r"C:\ffmpeg\ffmpeg-8.1-essentials_build\bin"
+    if has_ffmpeg:
+        if format_id == "best":
+            target_format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+        else:
+            # Pair selected video format with best compatible audio.
+            target_format = f"{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
+    else:
+        print("[WARNING] FFmpeg missing. Falling back to single progressive stream to ensure audio.")
+        # Best format that is pre-merged (contains both video and audio)
+        target_format = "best[ext=mp4]/best"
 
     ydl_opts = {
         "outtmpl": {"default": "%(title).80s_[%(resolution)s].%(ext)s"},
@@ -140,8 +159,6 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             "temp": temp_dir
         },
         "format": target_format,
-        "merge_output_format": "mp4",
-        "ffmpeg_location": ffmpeg_location,
         "quiet": False,
         "verbose": True,
         "no_warnings": False,
@@ -151,6 +168,11 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
         "fragment_retries": 10,
         "logger": CustomYtDlpLogger()
     }
+
+    if has_ffmpeg:
+        ydl_opts["merge_output_format"] = "mp4"
+        if ffmpeg_location:
+            ydl_opts["ffmpeg_location"] = ffmpeg_location
 
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
@@ -168,12 +190,21 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
                 # Fallback: guess the final filepath
                 pre_filepath = ydl.prepare_filename(info)
                 base, _ = os.path.splitext(pre_filepath)
-                # Since we used merge_output_format: 'mp4', it should be .mp4
-                if os.path.exists(base + ".mp4"):
+                if opts.get("merge_output_format") == "mp4" and os.path.exists(base + ".mp4"):
                     final_filepath = base + ".mp4"
                 elif os.path.exists(pre_filepath):
                     final_filepath = pre_filepath
-                    
+                else:
+                    import glob
+                    import shlex
+                    # glob escape the base to handle brackets/spaces properly
+                    candidates = glob.glob(f"{glob.escape(base)}*")
+                    if candidates:
+                        final_filepath = candidates[0]
+                        
+            if not final_filepath or not os.path.exists(final_filepath):
+                raise Exception(f"Download finished but output file not found on disk. Expected near: {ydl.prepare_filename(info)}")
+                
             return final_filepath
 
     try:
@@ -183,7 +214,10 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
         has_audio = check_has_audio(final_file, ffmpeg_location)
         if not has_audio:
             print("[AUDIO VALIDATION FAILED] No audio stream detected. Retrying with safe fallback format.")
+            # Fallback to single stream MP4 natively guaranteed to have audio and video
             ydl_opts["format"] = "best[ext=mp4]/best"
+            if "merge_output_format" in ydl_opts:
+                del ydl_opts["merge_output_format"]
             final_file = perform_download(ydl_opts)
             print(f"[FALLBACK SUCCESS] Saved to {final_file}")
         else:
@@ -191,8 +225,15 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             
     except Exception as e:
         print(f"[DOWNLOAD ERROR] Error during primary download: {e}")
+        import traceback
+        traceback.print_exc()
+        
         # One last fallback attempt if it totally crashed
         print("[FALLBACK] Attempting final safety fallback: best[ext=mp4]/best")
         ydl_opts["format"] = "best[ext=mp4]/best"
+        if "merge_output_format" in ydl_opts:
+            del ydl_opts["merge_output_format"]
         final_file = perform_download(ydl_opts)
         print(f"[FALLBACK SUCCESS] Saved to {final_file}")
+        
+    return final_file

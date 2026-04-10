@@ -142,9 +142,11 @@ async def start_single_download(data: DownloadRequest):
         )
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse(
             status_code=500,
-            content={"detail": str(e)}
+            content={"detail": f"Download failed: {str(e)}"}
         )
 
 
