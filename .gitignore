@@ -2,5 +2,4 @@ downloads/
 *.mp4
 *.webm
 *.mkv
-__pycache__/
-.env
+*.part
