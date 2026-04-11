@@ -1,7 +1,8 @@
 fastapi
 uvicorn
-jinja2
 yt-dlp
-selenium
-webdriver-manager
+jinja2
+python-multipart
 beautifulsoup4
+requests
+selenium
