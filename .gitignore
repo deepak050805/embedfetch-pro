@@ -1,6 +1,6 @@
-__pycache__/
-*.pyc
 downloads/
-_temp/
-*.part
+*.mp4
+*.webm
+*.mkv
+__pycache__/
 .env
