@@ -13,9 +13,16 @@ def extract_video_info(url: str):
     """
 
     ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
+    "quiet": True,
+    "no_warnings": True,
+    "cookiefile": "cookies.txt",
+    "retries": 5,
+    "extractor_retries": 3,
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
     }
+}
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -168,8 +175,9 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
             "home": output_dir,
             "temp": temp_dir
         },
+        "quiet": True,
+        "cookiefile": "cookies.txt",
         "format": target_format,
-        "quiet": False,
         "verbose": True,
         "no_warnings": False,
         "nopart": False,
@@ -306,10 +314,17 @@ def get_download_strategy(url: str, format_id="best") -> dict:
         target_format = f"{format_id}[ext=mp4]/{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
         
     ydl_opts = {
-        "format": target_format,
-        "quiet": True,
-        "no_warnings": True
+    "format": target_format,
+    "quiet": True,
+    "no_warnings": True,
+    "cookiefile": "cookies.txt",
+    "retries": 5,
+    "extractor_retries": 3,
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
     }
+}
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         cached = INFO_CACHE.get(url)
