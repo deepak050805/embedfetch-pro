@@ -12,16 +12,13 @@ def extract_video_info(url: str):
     - Prefer MP4 over WEBM automatically
     """
 
-    ydl_opts = {
+    yydl_opts = {
     "quiet": True,
     "no_warnings": True,
-    "cookiefile": "cookies.txt",
-    "retries": 5,
-    "extractor_retries": 3,
-    "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
+    "extract_flat": False,
+    "skip_download": True,
+    "socket_timeout": 10,
+    "cachedir": True,
 }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -29,7 +26,7 @@ def extract_video_info(url: str):
         
         # Cache for 60 seconds to eliminate download startup delay
         INFO_CACHE[url] = {
-            "expires": time.time() + 60,
+            "expires": time.time() + 300,
             "data": copy.deepcopy(info)
         }
 
@@ -303,28 +300,99 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 
 def get_download_strategy(url: str, format_id="best") -> dict:
     """
-    Determine if the video is safe for direct browser CDN redirection or needs backend proxy routing.
-    Youtube is direct. Protected embedded files are proxied to preserve Referer/Cookies.
+    Fast optimized strategy resolver:
+    - Uses cache first
+    - Avoids repeated extraction delays
+    - Faster direct/proxy routing
     """
     import copy
-    
+    import time
+
+    # Fast format selector
     if format_id == "best":
-        target_format = "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+        target_format = "best[ext=mp4]/best"
     else:
-        target_format = f"{format_id}[ext=mp4]/{format_id}+bestaudio[ext=m4a]/{format_id}+bestaudio/best"
-        
+        target_format = f"{format_id}[ext=mp4]/{format_id}/best"
+
     ydl_opts = {
-    "format": target_format,
-    "quiet": True,
-    "no_warnings": True,
-    "cookiefile": "cookies.txt",
-    "retries": 5,
-    "extractor_retries": 3,
-    "http_headers": {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
+        "format": target_format,
+        "quiet": True,
+        "no_warnings": True,
+        "cookiefile": "cookies.txt",
+        "retries": 3,
+        "extractor_retries": 2,
+        "socket_timeout": 10,
+        "cachedir": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
     }
-}
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+        # =========================
+        # FAST CACHE HIT
+        # =========================
+        cached = INFO_CACHE.get(url)
+        if cached and time.time() < cached["expires"]:
+            print(f"[FAST CACHE HIT] Using cached metadata for: {url}")
+
+            info = copy.deepcopy(cached["data"])
+
+            # Find selected format directly
+            selected_format = None
+            for f in info.get("formats", []):
+                if f.get("format_id") == format_id:
+                    selected_format = f
+                    break
+
+            # If chosen format found directly
+            if selected_format and selected_format.get("url"):
+                extractor = info.get("extractor", "").lower()
+
+                if "youtube" in extractor or "vimeo" in extractor:
+                    return {
+                        "type": "direct",
+                        "url": selected_format["url"]
+                    }
+                else:
+                    return {
+                        "type": "proxy",
+                        "url": None
+                    }
+
+        # =========================
+        # FALLBACK EXTRACTION
+        # =========================
+        print(f"[CACHE MISS] Fresh resolving: {url}")
+        info = ydl.extract_info(url, download=False)
+
+        extractor = info.get("extractor", "").lower()
+
+        # Direct public CDN sources
+        if "youtube" in extractor or "vimeo" in extractor:
+            direct_url = info.get("url")
+
+            if not direct_url and "requested_formats" in info:
+                for rf in info["requested_formats"]:
+                    if rf.get("url"):
+                        direct_url = rf["url"]
+                        break
+
+            if not direct_url:
+                raise Exception("Failed to extract direct CDN URL.")
+
+            return {
+                "type": "direct",
+                "url": direct_url
+            }
+
+        # Protected embedded hosts
+        return {
+            "type": "proxy",
+            "url": None
+        }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         cached = INFO_CACHE.get(url)
