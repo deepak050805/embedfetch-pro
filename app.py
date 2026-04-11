@@ -1,13 +1,13 @@
 import os
-import uuid
 import asyncio
 
-from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
+# ✅ FIXED IMPORT
 from downloader.ytdlp_handler import (
     extract_video_info,
     download_video,
@@ -23,7 +23,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 # =========================
-# ASYNC HELPERS
+# ASYNC HELPER
 # =========================
 async def run_blocking(func, *args):
     loop = asyncio.get_event_loop()
@@ -31,7 +31,7 @@ async def run_blocking(func, *args):
 
 
 # =========================
-# MODELS
+# MODEL
 # =========================
 class DownloadRequest(BaseModel):
     url: str
@@ -41,9 +41,25 @@ class DownloadRequest(BaseModel):
 # =========================
 # ROUTES
 # =========================
+# =========================
+# ROUTES
+# =========================
 @app.get("/")
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={}
+    )
+
+
+@app.get("/single")
+async def single_page(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="single_video.html",
+        context={}
+    )
 
 
 @app.post("/api/formats")
@@ -64,11 +80,10 @@ async def start_download(data: DownloadRequest):
             data.format_id
         )
 
-        if strategy["type"] == "direct":
-            return {
-                "status": "success",
-                "direct_url": strategy["url"]
-            }
+        return {
+    "status": "proxy",
+    "proxy_url": f"/api/download/proxy?url={data.url}&format_id={data.format_id}"
+}
 
         return {
             "status": "proxy",

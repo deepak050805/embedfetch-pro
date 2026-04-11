@@ -2,16 +2,15 @@ import yt_dlp
 import os
 import time
 import copy
-import shutil
 import subprocess
 import json
 
 # =========================
-# CACHE SYSTEM (LRU STYLE)
+# CACHE SYSTEM
 # =========================
 INFO_CACHE = {}
 MAX_CACHE = 100
-CACHE_TTL = 300  # 5 min
+CACHE_TTL = 300
 
 
 def set_cache(url, data):
@@ -39,54 +38,57 @@ def extract_video_info(url: str):
 
     ydl_opts = {
         "quiet": True,
-        "no_warnings": True,
         "skip_download": True,
-        "socket_timeout": 10,
-        "cachedir": True,
-        "cookiefile": "cookies.txt",
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "en-US,en;q=0.9",
         }
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        set_cache(url, info)
 
-        unique_formats = {}
+    formats = []
 
-        for f in info.get("formats", []):
-            height = f.get("height")
-            vcodec = f.get("vcodec")
+    for f in info.get("formats", []):
+        height = f.get("height")
+        vcodec = f.get("vcodec")
+        acodec = f.get("acodec")
 
-            if not height or vcodec == "none":
-                continue
-
-            res_key = f"{height}p"
-            ext = f.get("ext", "mp4")
-            filesize = f.get("filesize") or f.get("filesize_approx") or 0
-
-            fmt = {
+        if (
+            height and
+            vcodec != "none" and
+            f.get("ext") in ["mp4", "webm"] and
+            height >= 144
+        ):
+            formats.append({
                 "format_id": f.get("format_id"),
-                "resolution": res_key,
+                "resolution": f"{height}p",
                 "height": height,
-                "ext": ext,
-                "filesize": filesize
-            }
+                "ext": f.get("ext"),
+                "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
+                "vcodec": vcodec,
+                "acodec": acodec,
+                "fps": int(f.get("fps") or 0)
+            })
 
-            if res_key not in unique_formats:
-                unique_formats[res_key] = fmt
-            else:
-                existing = unique_formats[res_key]
+    # ✅ REMOVE DUPLICATES
+    unique = {}
 
-                if ext == "mp4" and existing["ext"] != "mp4":
-                    unique_formats[res_key] = fmt
-                elif filesize > existing["filesize"]:
-                    unique_formats[res_key] = fmt
+    for f in formats:
+        res = f["resolution"]
 
-        formats = sorted(unique_formats.values(), key=lambda x: x["height"], reverse=True)
-        return formats
+        if res not in unique:
+            unique[res] = f
+        else:
+            if f["ext"] == "mp4" and f["acodec"] != "none":
+                unique[res] = f
+
+    return sorted(unique.values(), key=lambda x: x["height"], reverse=True)
 
 
 # =========================
@@ -95,19 +97,14 @@ def extract_video_info(url: str):
 def check_has_audio(filepath: str) -> bool:
     try:
         cmd = [
-            "ffprobe",
-            "-v", "quiet",
+            "ffprobe", "-v", "quiet",
             "-print_format", "json",
-            "-show_streams",
-            filepath
+            "-show_streams", filepath
         ]
         result = subprocess.run(cmd, capture_output=True, text=True)
         data = json.loads(result.stdout)
 
-        for stream in data.get("streams", []):
-            if stream.get("codec_type") == "audio":
-                return True
-        return False
+        return any(s.get("codec_type") == "audio" for s in data.get("streams", []))
     except:
         return True
 
@@ -119,56 +116,51 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 
     os.makedirs(output_dir, exist_ok=True)
 
-    target_format = (
-        "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
-        if format_id == "best"
-        else f"{format_id}+bestaudio/best"
-    )
-
     ydl_opts = {
-        "outtmpl": "%(title).80s.%(ext)s",
-        "quiet": True,
-        "format": target_format,
-        "cookiefile": "cookies.txt",
+        "outtmpl": os.path.join(output_dir, "%(title).80s.%(ext)s"),
+
+        # stable + fast
+        "format": "best[ext=mp4]/best",
+
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"]
+            }
+        },
+
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0",
+        },
+
+        "ffmpeg_location": "C:\\ffmpeg\\ffmpeg-8.1-essentials_build\\bin",
+        "merge_output_format": "mp4",
+
         "retries": 10,
         "concurrent_fragment_downloads": 5,
-        "restrictfilenames": True,
-        "merge_output_format": "mp4",
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0"
-        },
-        "postprocessor_args": {
-            "ffmpeg": [
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-profile:v", "main",
-                "-level", "3.1",
-                "-movflags", "+faststart"
-            ]
-        }
     }
 
     if progress_hook:
         ydl_opts["progress_hooks"] = [progress_hook]
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
-        cached = get_cache(url)
-
-        if cached:
-            info = ydl.process_ie_result(cached, download=True)
-        else:
-            info = ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=True)
 
         filepath = ydl.prepare_filename(info)
 
-        if not filepath.endswith(".mp4"):
-            base, _ = os.path.splitext(filepath)
-            filepath = base + ".mp4"
+        # remove .fxxx
+        base, _ = os.path.splitext(filepath)
+        if ".f" in base:
+            base = base.split(".f")[0]
+
+        filepath = base + ".mp4"
+
+        if not os.path.exists(filepath):
+            raise Exception(f"File not found: {filepath}")
 
         if not check_has_audio(filepath):
-            # fallback
-            ydl_opts["format"] = "best[ext=mp4]/best"
+            print("Retrying with fallback...")
+            ydl_opts["format"] = "best"
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
                 info = ydl2.extract_info(url, download=True)
                 filepath = ydl2.prepare_filename(info)
@@ -180,34 +172,7 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 # DOWNLOAD STRATEGY
 # =========================
 def get_download_strategy(url: str, format_id="best") -> dict:
-
-    ydl_opts = {
-        "quiet": True,
-        "cookiefile": "cookies.txt",
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0"
-        }
+    return {
+        "type": "proxy",
+        "url": None
     }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
-        cached = get_cache(url)
-
-        if cached:
-            info = cached
-        else:
-            info = ydl.extract_info(url, download=False)
-            set_cache(url, info)
-
-        extractor = info.get("extractor", "").lower()
-
-        if "youtube" in extractor or "vimeo" in extractor:
-            return {
-                "type": "direct",
-                "url": info.get("url")
-            }
-
-        return {
-            "type": "proxy",
-            "url": None
-        }

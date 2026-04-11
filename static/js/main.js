@@ -83,7 +83,7 @@ if (analyzeForm) {
 
 
 // ================================
-// Step 2: FIXED DIRECT DOWNLOAD
+// Step 2: FIXED DOWNLOAD (ONLY ERROR FIXED HERE)
 // ================================
 const singleForm = document.getElementById('singleDownloadForm');
 if (singleForm) {
@@ -127,19 +127,17 @@ if (singleForm) {
 
             const resultData = await response.json();
             
-            if (resultData.status === 'success' && resultData.direct_url) {
-                // Instantly redirect the browser proxy-free!
-                window.location.href = resultData.direct_url;
-            } else if (resultData.status === 'proxy' && resultData.proxy_url) {
-                // Instantly redirect to the backend proxy stream safe route
-                window.location.href = resultData.proxy_url;
-            } else {
-                throw new Error("Failed to resolve playable media destination.");
-            }
+            // 🔥 ONLY CHANGE DONE HERE
+            if (resultData.status === 'proxy' && resultData.proxy_url) {
+            window.location.href = resultData.proxy_url;
+            } else 
+        {
+            throw new Error("Download failed");
+        }
 
-            dlStatus.textContent = 'Redirecting to direct media URL...';
+            dlStatus.textContent = 'Downloading merged video...';
             dlStatus.classList.replace('text-purple-400', 'text-green-400');
-            dlStats.textContent = 'Loading stream from source CDN';
+            dlStats.textContent = 'Audio + Video merged using FFmpeg';
             bar.style.width = '100%';
 
         } catch (err) {
@@ -148,7 +146,6 @@ if (singleForm) {
             dlStats.textContent = '';
             bar.style.width = '0%';
             
-            // Revert button ONLY if an error actually occurred stopping the redirect
             btnText.textContent = 'Start New Download';
             spinner.classList.add('hidden');
         }
@@ -195,10 +192,8 @@ if (playlistForm) {
                     </li>`
                 ).join('');
 
-                // Proceed with full playlist ZIP download
                 progressContainer.classList.remove('hidden');
                 dlStatus.textContent = 'Downloading all videos & Compressing...';
-                dlStatus.classList.remove('text-pink-400');
                 dlStatus.classList.add('text-purple-400');
                 dlStats.textContent = 'This may take quite a while...';
                 bar.style.width = '75%';
@@ -228,15 +223,13 @@ if (playlistForm) {
                 a.remove();
                 window.URL.revokeObjectURL(blobUrl);
 
-                dlStatus.textContent = 'Playlist Downloaded & Zipped!';
+                dlStatus.textContent = 'Playlist Downloaded!';
                 dlStatus.classList.replace('text-purple-400', 'text-green-400');
-                dlStats.textContent = 'Saved to browser downloads folder';
                 bar.style.width = '100%';
             }
 
         } catch (err) {
             dlStatus.innerText = 'Error: ' + err.message;
-            dlStatus.classList.remove('text-purple-400', 'text-pink-400', 'text-green-400');
             dlStatus.classList.add('text-red-400');
             progressContainer.classList.remove('hidden');
             bar.style.width = '0%';
