@@ -172,7 +172,7 @@ def download_video(url: str, output_dir: str, format_id="best", progress_hook=No
 # DOWNLOAD STRATEGY
 # =========================
 def get_download_strategy(url: str, format_id="best") -> dict:
-    return {
-        "type": "proxy",
-        "url": None
-    }
+    # Simple strategy: proxy download via the API endpoint in this app.
+    # Returning a full relative URL that the frontend can call.
+    proxy_url = f"/api/download/proxy?url={url}&format_id={format_id}"
+    return {"type": "proxy", "url": proxy_url}

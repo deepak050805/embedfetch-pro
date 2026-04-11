@@ -80,15 +80,13 @@ async def start_download(data: DownloadRequest):
             data.format_id
         )
 
-        return {
-    "status": "proxy",
-    "proxy_url": f"/api/download/proxy?url={data.url}&format_id={data.format_id}"
-}
+        # If the strategy provides a proxy url return it, otherwise fall back
+        # to the default proxy endpoint.
+        proxy_url = strategy.get("url") if isinstance(strategy, dict) else None
+        if not proxy_url:
+            proxy_url = f"/api/download/proxy?url={data.url}&format_id={data.format_id}"
 
-        return {
-            "status": "proxy",
-            "proxy_url": f"/api/download/proxy?url={data.url}&format_id={data.format_id}"
-        }
+        return {"status": "proxy", "proxy_url": proxy_url}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
